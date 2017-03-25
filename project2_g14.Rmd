@@ -1,0 +1,123 @@
+---
+title: "Project 2"
+author: "Amanda Coker, Akshata Mohan, Caroline Nelson, Hillary Regan"
+date: "2/22/2017"
+output: html_document
+---
+
+**Attached are the following R files:**  
+a. similarityMat.R  
+b. constructFund.R  
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#### Question 1  
+**Calculate the daily returns for each stock using the 2012 price data.**  
+
+```{r,echo=TRUE}
+#Q1
+source('readData.R')
+returns = matrix(0,nrow=250,ncol=100)
+
+for (j in 1:100){
+  stock = as.vector(priceMat[,j])
+  for (i in 2:250) 
+  {
+    returns[i,j] = (stock[i] - stock[i-1])/stock[i-1]
+  }
+}
+```
+
+#### Question 2  
+**As our initial candidate for the similarity matrix, we found the correlation matrix for the returns of the 100 stocks. **
+
+```{r, echo=TRUE}
+#Q2 
+cor_matrix=cor(returns, use="pairwise.complete.obs")
+```
+
+#### Question 3  
+**Code the integer program above as another function that returns the weights for each of the stock that needs to be in your portfolio**  
+  
+**weights = constructFund(rho, q, priceMat, sharesMat, unique_tickers, unique_dates)**  
+  
+**This will amount to simply formulating the integer program, solving it and then using the market capitalization of each company on the last date to compute weights. The output weights will be a vector of size n with only q non-zero elements denoting the weights.**  
+
+```{r, echo=TRUE, warning=FALSE, message=FALSE}
+#Q3
+q = 25
+rho <- cor_matrix
+source('constructFund.R')
+```
+```{r}
+weightslist = constructFund(rho,q,priceMat,sharesMat,unique_tickers,unique_dates)
+weightslist2 = constructFund(rho2,q,priceMat,sharesMat,unique_tickers,unique_dates)
+```
+#### Question 4  
+**Use your weights to construct an index portfolio at the end of 2012.** 
+  
+**Compare how this index portfolio performs monthly in 2013 as compared to the NASDAQ 100 index using the 2013 stock data provided. Here you may assume that you can directly invest in the Index as if it is a stock. Present your findings using any visualizations or tabulations. You can assume that you will be investing 1 million in your fund. In this case, your shares of each stock you choose to construct the portfolio should be large. As a result, you can leave the shares as non-integers, because the effect that the non-integer parts of shares have should be marginal.**  
+
+```{r,echo=FALSE}
+library(ggplot2)
+q=25
+
+nasdaq13 = c(2660.93,2731.53, 2738.58, 2818.69, 2887.44, 2981.76, 2909.60, 3090.19, 3073.81, 3218.20, 3377.73, 3487.82, 3592.00)
+weights = constructFund(rho,q,priceMat,sharesMat,unique_tickers,unique_dates)
+
+purchase <- weights*1000000/priceMat[nrow(priceMat),]
+monthlyvalue <- rowSums(matrix(rep(purchase, 12), nrow=12, byrow=T)*monthlyPriceMat)
+
+monthly_returns <- monthlyvalue/c(1000000, monthlyvalue[1:11])-1
+
+nasdaq_returns = nasdaq13[2:13]/nasdaq13[1:12]-1
+
+months = seq(1,12)
+data = data.frame(months,monthly_returns,nasdaq_returns)
+
+gg = ggplot(data,environment=environment()) + geom_line(aes(months,nasdaq_returns,color="red")) 
+gg = gg + geom_line(aes(months,monthly_returns,color="green")) 
+gg = gg + scale_color_discrete(name="Legend",labels=c('Nasdaq','Our Fund (correlation)')) + labs(y="Returns",title="Monthly Returns")
+gg 
+
+```
+
+#### Question 5  
+**Earlier you used correlation as the similarity measure. Now instead create your own similarity measure and put it in a function similarityMat that has the same inputs and outputs**  
+  
+**rho = similarityMat(priceMat, sharesMat, unique_tickers,unique_dates)**  
+  
+**Use this rho in your function call to constructFund and as in step 4, evaluate the performance of this fund as well. Please compare the new fund to the previous fund. Try to explain why the performance of the new fund is better (or worse).**  
+
+```{r,echo=FALSE, message=FALSE}
+#Q5
+source('similarityMat.R')
+library(ggplot2)
+q=25
+
+#rho
+rho2 = similarityMat(priceMat, sharesMat, unique_tickers,unique_dates)
+
+nasdaq13 = c(2660.93,2731.53, 2738.58, 2818.69, 2887.44, 2981.76, 2909.60, 3090.19, 3073.81, 3218.20, 3377.73, 3487.82, 3592.00)
+weights2 = constructFund(rho2,q,priceMat,sharesMat,unique_tickers,unique_dates)
+
+purchase <- weights2*1000000/priceMat[nrow(priceMat),]
+monthlyvalue <- rowSums(matrix(rep(purchase, 12), nrow=12, byrow=T)*monthlyPriceMat)
+
+monthly_returns <- monthlyvalue/c(1000000, monthlyvalue[1:11])-1
+
+nasdaq_returns = nasdaq13[2:13]/nasdaq13[1:12]-1
+
+months = seq(1,12)
+data = data.frame(months,monthly_returns,nasdaq_returns)
+
+gg2 = ggplot(data,environment=environment()) + geom_line(aes(months,nasdaq_returns,color="red")) 
+gg2 = gg2 + geom_line(aes(months,monthly_returns,color="green")) 
+gg2 = gg2 + scale_color_discrete(name="Legend",labels=c('Nasdaq','Our Fund (cosine)')) + labs(y="Returns",title="Monthly Returns")
+gg2 
+
+
+```
+

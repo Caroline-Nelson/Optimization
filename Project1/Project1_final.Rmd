@@ -1,0 +1,291 @@
+---
+title: "Project1_g1"
+author: "Wenduo Wang, Valerie Roth, Caroline Nelson, & Jon Zeller"
+date: "February 7, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+# import packages
+library(dplyr)
+library(lpSolve)
+opts_chunk$set(tidy.opts=list(width.cutoff=60),tidy=TRUE)
+```
+
+
+```{r, include=FALSE, echo=FALSE}
+# import packages
+library(lpSolve)
+```
+
+## Part 1
+
+The portfolio construction problem can be formulated as a linear program where the objective is to minimize the total costs of bonds purchased subject to the liability constraints. The decision boils down to how much of each bond type to purchase at the onset of the problem. Using the provided numbers, the decision is as follows:
+
+#### Choice Variables
+Choose how much of each bond to buy - call them $x_1$ to $x_{10}$
+
+#### Objective Function
+Here, our goal is to minimize the total cost, defined by the prices of each bond multiplied by the quantity purchased:
+
+Minimize: $102x_1 + 99x_2 + 101x_3 + 98x_4 + 98x_5 + 104x_6 + 100x_7 + 101x_8 + 109x_9 + 94x_{10}$
+
+#### Constraints
+The constraints in this problem correspond to the liabilities that must be paid in each period. The available funds, which will be exactly equal to the liabilities, are the coupons of each surviving bond plus the the face values of all bonds that expire in that period. They are as follows:
+
+Year 1: $12000 = 105x_1 + 3.5x_2 + 5x_3 + 3.5x_4 + 4x_5 + 9x_6 + 6x_7 + 8x_8 + 9x_9 + 7x_{10}$  
+Year 2: $18000 = 103.5x_2 + 105x_3 + + 3.5x_4 + 4x_5 + 9x_6 + 6x_7 + 8x_8 + 9x_9 + 7x_{10}$  
+Year 3: $20000 = 103.5x_4 + 4x_5 + 9x_6 + 6x_7 + 8x_8 + 9x_9 + 7x_{10}$  
+Year 4: $20000 = 104x_5 + 109x_6 + 6x_7 + 8x_8 + 9x_9 + 7x_{10}$  
+Year 5: $16000 = 106x_7 + 8x_8 + 9x_9 + 7x_{10}$  
+Year 6: $15000 = 108x_8 + 9x_9 + 7x_{10}$  
+Year 7: $12000 = 109x_9 + 7x_{10}$  
+Year 8: $10000 = 107x_{10}$  
+
+For example, in year 3, the liabilities of $20000 must be met by a combination of the coupon+face values of bond 4, which reaches maturity, plus the coupon payments of bonds 5-10 which are yet to mature. 
+
+
+## Part 2
+
+```{r}
+# define constraints matrix
+A = matrix(0,8,10) # 10 input vars, 8 constraints
+
+#Bond     1 2    3  4    5  6  7  8  9  10
+#Coupon   5 3.5  5  3.5  4  9  6  8  9  7
+#Maturity 1 2    2  3    4  5  5  6  7  8
+
+
+A[1,1] = c(105) # first column is payoffs of bond 1 in each year - matures at t=1
+A[1:2,2] = c(rep(3.5,1),103.5) # second column is payoffs of bond 2 in each year - matures at t=2
+A[1:2,3] = c(rep(5,1),105) # third col is payoffs of bond 3, etc...
+A[1:3,4] = c(rep(3.5,2),103.5)
+A[1:4,5] = c(rep(4,3),104)
+A[1:5,6] = c(rep(9,4),109)
+A[1:5,7] = c(rep(6,4),106)
+A[1:6,8] = c(rep(8,5),108)
+A[1:7,9] = c(rep(9,6),109)
+A[1:8,10] = c(rep(7,7),107)
+
+
+# define values for constraints matrix - liabilities in each time period
+B = c(12000, 18000, 20000, 20000, 16000, 15000, 12000, 10000)
+
+# define obj function - minimize costs of bonds
+C = c(102, 99, 101, 98, 98, 104, 100, 101, 102, 94)
+
+# define direction of inequalities - equalities
+dir = rep("=",8)
+
+# solve linear program and print solution and obj vals
+soln = lp(C,A,direction='min',dir,B)
+
+soln$status
+soln$solution
+soln$objval
+```
+
+
+
+## Part 3
+
+```{r}
+# Inputs: 
+#P is the vector containing the prices of 𝑖 = 1, … , 𝑁 bonds
+#C is the vector containing the coupon payments for the N bonds.
+#M is the vector containing the maturity (in years) for the N bonds.
+#L is the vector of non-negative liabilities for 𝑖 = 1, … , 𝑇 years
+ 
+
+solvebonds <- function(p,c,m,l) {
+  
+  # Inputs: 
+  #P is the vector containing the prices of 𝑖 = 1, … , 𝑁 bonds
+  #C is the vector containing the coupon payments for the N bonds.
+  #M is the vector containing the maturity (in years) for the N bonds.
+  #L is the vector of non-negative liabilities for 𝑖 = 1, … , 𝑇 y
+  
+  
+  # initialize matrix of zeroes - one row for each constraint (liability), one column for each bond
+  A = matrix(0,length(l),length(p)) # l constraints, p = m input vars
+  
+  # fill in martrix with payments and maturities
+  for (i in seq(1,length(c))){ #for each bond, do the following:
+    A[1:m[i],i] = c(rep(c[i],m[i]-1),100+c[i])
+    # each column - corresponding to a bond - is filled with each row through its maturity with its corresponding payment
+  }
+  
+  # define values for constraints matrix - liabilities in each time period
+  B = l
+  
+  # define obj function - minimize costs of bonds
+  C = p
+  
+  # define direction of equalities vector
+  dir = rep("=",length(l))
+  
+  
+  # solve LP and return results
+  soln  = lp(C,A,direction='min',dir,B,compute.sens = 1)
+  return(soln)
+}
+```
+
+
+```{r}
+
+### test function
+# liabilities
+liab = c(12000, 18000, 20000, 20000, 16000, 15000, 12000, 10000)
+
+# prices
+price = c(102, 99, 101, 98, 98, 104, 100, 101, 102, 94)
+
+# maturities
+mat = c(1,2,2,3,4,5,5,6,7,8)
+
+# coupon values
+coup = c(5,3.5,5,3.5,4,9,6,8,9,7)
+
+## Test the function
+test = solvebonds(p = price,c = coup,m = mat,l = liab)
+
+test$solution
+
+```
+
+
+## Part 4
+
+To develop the optimal combination of bonds to meet this liability schedule, we will assume a date of 12/31/2016 and use historical bond price data from this date. Then, we can look at the menu of bonds available with maturities corresponding to the dates of liabilities and our problem becomes similar to the one above. To account for the six-month coupon payments we will divide the listed coupons by 2 and multiply all of the maturities by 2, so that each time period represents six months rather than one year. 
+
+Looking at the bond data from 12/31/2016, we see the following schedule of bonds relevant to our dates:
+```{r}
+library(dplyr)
+data <- read.csv("wsj.csv")
+# Convert Maturity dates to date format
+data$Maturity <- as.Date(data$Maturity, format="%m/%d/%Y")
+
+#### Input - Maturity dates
+maturity_dates <- c(
+                        "2016-06-30",
+                        "2016-12-31",
+                        "2017-06-30",
+                        "2017-12-31",
+                        "2018-06-30",
+                        "2018-12-31",
+                        "2019-06-30",
+                        "2019-12-31",
+                        "2020-06-30",
+                        "2020-12-31",
+                        "2021-06-30",
+                        "2021-12-31"
+                    )
+
+### Input - liabilities at each maturity
+
+liabilities <- c(9000000, 9000000, 10000000, 10000000,
+                 6000000, 6000000, 9000000, 9000000,
+                 10000000, 10000000, 5000000, 3000000)
+
+# Step 1: find valid bonds: which bonds mature at the defined dates
+find_options <- function(date){
+    return(data[data$Maturity == date,])
+}
+options <- lapply(maturity_dates, find_options)
+
+# Step 2: convert maturities to periods
+# Step 3: get the price of each bond
+# Step 4: get the coupon of each bond
+
+# Define a helper to calculate maturity periods in half years
+timedelta <- function(t1, t2){
+    return(as.integer(round(
+        difftime(toString(t1), toString(t2), units = "days")/(365/2)
+        )))
+}
+
+# Transform the input to vectors for solver
+maturity1 <- c()
+price1 <- c()
+coupon1 <- c()
+today <- "2015-12-31"
+for (i in 1:length(options)){
+    maturities <- options[[i]]$Maturity
+    prices <- options[[i]]$Asked
+    coupons <- options[[i]]$Coupon
+    for(j in 1:length(maturities)){
+        maturity1 <- c(maturity1, 
+                       timedelta(maturities[j], today)
+                       )
+        price1 <- c(price1, prices[j])
+        # Important: semi-annual coupon should be halved
+        coupon1 <- c(coupon1, coupons[j]/2)
+    }
+}
+bonds <- data_frame()
+for (i in 1:length(options)){
+    bonds <- rbind(bonds, options[[i]])
+}
+bonds
+```
+
+We will let these 26 bonds be equal to $x_1$ to $x_{26}$, with maturities of 1 to 12 for each of the six-month intervals. We will define C as a the coupon vector and P as the price vector with entries for each of $x_1$ to $x_{26}$. 
+
+
+Thus, our constraints become, generally, $liability(t) = [(100+c/2)*x_i]$ (if $x_i$ matures in time t) $+ [c/2*x_i]$, if $x_i$ matures in time > t. The liabilities are as follows: 
+
+|    Date   | Liability |
+|:---------:|:---------:|
+| 6/30/17   | 9000000   |
+| 12/31/17  | 9000000   |
+| 6/30/18   | 10000000  |
+| 12/31/18  | 10000000  |
+| 6/30/19   | 6000000   |
+| 12/31/19  | 6000000   |
+| 6/30/20   | 9000000   |
+| 12/31/20  | 9000000   |
+| 6/30/21   | 10000000  |
+| 12/31/21  | 10000000  |
+| 6/30/22   | 5000000   |
+| 12/31/22  | 3000000   |
+
+Using this information as inputs to our linear program, we can formulate the problem as follows:
+
+Choices: $x_{1-26}$
+Objective: min $\sum_{i=1}^{26} p_{i}*x_{i}$, where $p$ is the spot price.  
+Constraints: for each due date of liabilities, the payment from the bonds is equal
+to the liability.
+
+We have used the input data from the WSJ site as a raw input, and extracted the relevant prices and coupons for each bond above. Solving below, we can see the optimal solution and objective function value.
+
+#### Duals/Shadow Prices 
+```{r,echo=FALSE}
+liability=c(9000,9000,10000,10000,6000,6000,9000,9000,10000,10000,5000,3000)
+ 
+plotter<-function(p,c,m,l){
+  soln1=solvebonds(p,c,m,l)
+  #print(soln1$duals)
+  y_duals = soln1$duals[1:12]*1000
+  
+  x_dates = c(1,2,3,4,5,6,7,8,9,10,11,12)
+  
+  plot(x_dates,y_duals,xlab='Date',ylab='Duals')
+}
+
+plotter(p=price1,c=coupon1,m=maturity1,l=liability)
+```
+
+Above we can see a plot that shows, on the x-axis, each date, which corresponds to a liability. The y-axis shows the associated dual or shadow price. These values represent the change in the objective function for a given unit change in the liability/constraint. They are relevant only in a neighborhood around the current values, but they represent how much more or less we would have to pay upfront to meet a one-unit change in the corresponding liability. As such, they are a way to see which constraints are most sensitive. There is a clear decreasing trend, indicating that extra units of liability become cheaper over time. An extra $1000 in liability in the first few periods will increase total cost (the objective function) by very nearly $1000, whereas later time periods only result in a cost increase of around $900. This reflects the time value of money and cost of liquidity, as an extra dollar in, say, five years is cheaper than an extra dollar tomorrow.
+
+```{r,echo=FALSE}
+result <- solvebonds(p=price1, c=coupon1, m=maturity1, l=liability)
+
+Purchase <- result$solution
+
+bonds <- cbind(bonds, Purchase)
+bonds
+```
+![Yield to Maturity Curve](ytm.png)
